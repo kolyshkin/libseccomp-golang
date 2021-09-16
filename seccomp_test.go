@@ -954,11 +954,13 @@ L:
 func TestNotifUnsupported(t *testing.T) {
 	execInSubprocess(t, subprocessNotifUnsupported)
 }
+
 func subprocessNotifUnsupported(t *testing.T) {
 	// seccomp notification requires API level >= 6
-	api := 0
+	var api uint
 	if APILevelIsSupported() {
-		api, err := GetAPI()
+		var err error
+		api, err = GetAPI()
 		if err != nil {
 			t.Errorf("Error getting API level: %s", err)
 		} else if api >= 6 {
