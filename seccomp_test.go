@@ -439,68 +439,61 @@ func TestFilterAttributeGettersAndSetters(t *testing.T) {
 		t.Errorf("No new privileges bit was not set correctly")
 	}
 
-	if APILevelIsSupported() {
-		api, err := GetAPI()
+	// Checks that require API level functionality.
+
+	if !APILevelIsSupported() {
+		t.Log("Skipping part that require API level support")
+		return
+	}
+
+	// Checks that require API level 3.
+
+	api, err := GetAPI()
+	if err != nil {
+		t.Errorf("Error getting API level: %s", err)
+	} else if api < 3 {
+		err = SetAPI(3)
 		if err != nil {
-			t.Errorf("Error getting API level: %s", err)
-		} else if api < 3 {
-			err = SetAPI(3)
-			if err != nil {
-				t.Errorf("Error setting API level: %s", err)
-			}
+			t.Log("Skipping part that requires API level 3")
+			return
 		}
 	}
 
 	err = filter.SetLogBit(true)
 	if err != nil {
-		if !APILevelIsSupported() {
-			t.Logf("Ignoring failure: %s\n", err)
-		} else {
-			t.Errorf("Error setting log bit")
-		}
+		t.Errorf("Error setting log bit: %v", err)
 	}
 
 	log, err := filter.GetLogBit()
 	if err != nil {
-		if !APILevelIsSupported() {
-			t.Logf("Ignoring failure: %s\n", err)
-		} else {
-			t.Errorf("Error getting log bit")
-		}
+		t.Errorf("Error getting log bit: %v", err)
 	} else if log != true {
-		t.Errorf("Log bit was not set correctly")
+		t.Error("Log bit was not set correctly")
 	}
 
-	if APILevelIsSupported() {
-		api, err := GetAPI()
+	// Checks that require API level 4.
+
+	api, err = GetAPI()
+	if err != nil {
+		t.Errorf("Error getting API level: %s", err)
+	} else if api < 4 {
+		err = SetAPI(4)
 		if err != nil {
-			t.Errorf("Error getting API level: %s", err)
-		} else if api < 4 {
-			err = SetAPI(4)
-			if err != nil {
-				t.Skipf("Skipping test: API level %d is less than 4", api)
-			}
+			t.Log("Skipping part that requires API level 4")
+			return
 		}
 	}
 
 	err = filter.SetSSB(true)
 	if err != nil {
-		if !APILevelIsSupported() {
-			t.Logf("Ignoring failure: %s\n", err)
-		} else {
-			t.Errorf("Error setting SSB bit")
-		}
+		t.Errorf("Error setting SSB bit: %v", err)
 	}
 
 	ssb, err := filter.GetSSB()
 	if err != nil {
-		if !APILevelIsSupported() {
-			t.Logf("Ignoring failure: %s\n", err)
-		} else {
-			t.Errorf("Error getting SSB bit")
-		}
+		t.Errorf("Error getting SSB bit: %v", err)
 	} else if ssb != true {
-		t.Errorf("SSB bit was not set correctly")
+		t.Error("SSB bit was not set correctly")
 	}
 }
 
