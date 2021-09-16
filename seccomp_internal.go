@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Internal functions for libseccomp Go bindings
@@ -27,10 +28,10 @@ import (
 #include <stdlib.h>
 #include <seccomp.h>
 
-#if SCMP_VER_MAJOR < 2
-#error Minimum supported version of Libseccomp is v2.2.0
-#elif SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 2
-#error Minimum supported version of Libseccomp is v2.2.0
+#if (SCMP_VER_MAJOR < 2) || \
+    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 2) || \
+    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 2 && SCMP_VER_MICRO < 1)
+#error Minimum supported version of Libseccomp is v2.2.1
 #endif
 
 #define ARCH_BAD ~0
@@ -324,7 +325,7 @@ func checkVersion(op string, major, minor, micro uint) error {
 }
 
 func ensureSupportedVersion() error {
-	return checkVersion("seccomp", 2, 2, 0)
+	return checkVersion("seccomp", 2, 2, 1)
 }
 
 // Get the API level
@@ -442,11 +443,6 @@ func (f *ScmpFilter) addRuleGeneric(call ScmpSyscall, action ScmpAction, exact b
 			return err
 		}
 	} else {
-		// We don't support conditional filtering in library version v2.1
-		if err := checkVersion("conditional filtering", 2, 2, 1); err != nil {
-			return err
-		}
-
 		argsArr := C.make_arg_cmp_array(C.uint(len(conds)))
 		if argsArr == nil {
 			return fmt.Errorf("error allocating memory for conditions")
