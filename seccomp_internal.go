@@ -1,5 +1,3 @@
-// +build linux
-
 // Internal functions for libseccomp Go bindings
 // No exported functions
 
@@ -27,10 +25,10 @@ import (
 #include <stdlib.h>
 #include <seccomp.h>
 
-#if SCMP_VER_MAJOR < 2
-#error Minimum supported version of Libseccomp is v2.2.0
-#elif SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 2
-#error Minimum supported version of Libseccomp is v2.2.0
+#if (SCMP_VER_MAJOR < 2) || \
+    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 3) || \
+    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 3 && SCMP_VER_MICRO < 1)
+#error This package requires libseccomp >= v2.3.1
 #endif
 
 #define ARCH_BAD ~0
@@ -118,8 +116,7 @@ const uint32_t C_ACT_NOTIFY        = SCMP_ACT_NOTIFY;
 
 // The libseccomp SCMP_FLTATR_CTL_LOG member of the scmp_filter_attr enum was
 // added in v2.4.0
-#if (SCMP_VER_MAJOR < 2) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4)
+#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
 #define SCMP_FLTATR_CTL_LOG _SCMP_FLTATR_MIN
 #endif
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
@@ -178,8 +175,7 @@ unsigned int get_micro_version()
 #endif
 
 // The libseccomp API level functions were added in v2.4.0
-#if (SCMP_VER_MAJOR < 2) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4)
+#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
 const unsigned int seccomp_api_get(void)
 {
 	// libseccomp-golang requires libseccomp v2.2.0, at a minimum, which
@@ -222,8 +218,7 @@ void add_struct_arg_cmp(
 }
 
 // The seccomp notify API functions were added in v2.5.0
-#if (SCMP_VER_MAJOR < 2) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5)
+#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
 
 struct seccomp_data {
 	int nr;
@@ -275,11 +270,11 @@ type scmpFilterAttr uint32
 
 const (
 	filterAttrActDefault scmpFilterAttr = iota
-	filterAttrActBadArch scmpFilterAttr = iota
-	filterAttrNNP        scmpFilterAttr = iota
-	filterAttrTsync      scmpFilterAttr = iota
-	filterAttrLog        scmpFilterAttr = iota
-	filterAttrSSB        scmpFilterAttr = iota
+	filterAttrActBadArch
+	filterAttrNNP
+	filterAttrTsync
+	filterAttrLog
+	filterAttrSSB
 )
 
 const (
@@ -307,10 +302,12 @@ var (
 
 // Nonexported functions
 
-// checkVersion returns an error if libseccomp version used during runtime
-// is less than the one required by major, minor, and micro arguments.
-// Argument op is arbitrary non-empty operation description, which
-// may is used as a part of the  error message returned.
+// checkVersion returns an error if the libseccomp version being used
+// is less than the one specified by major, minor, and micro arguments.
+// Argument op is an arbitrary non-empty operation description, which
+// is used as a part of the error message returned.
+//
+// Most users should use checkAPI instead.
 func checkVersion(op string, major, minor, micro uint) error {
 	if (verMajor > major) ||
 		(verMajor == major && verMinor > minor) ||
@@ -318,13 +315,15 @@ func checkVersion(op string, major, minor, micro uint) error {
 		return nil
 	}
 	return &VersionError{
-		op:     op,
-		minVer: fmt.Sprintf("%d.%d.%d", major, minor, micro),
+		op:    op,
+		major: major,
+		minor: minor,
+		micro: micro,
 	}
 }
 
 func ensureSupportedVersion() error {
-	return checkVersion("seccomp", 2, 2, 0)
+	return checkVersion("seccomp", 2, 3, 1)
 }
 
 // Get the API level
@@ -442,11 +441,6 @@ func (f *ScmpFilter) addRuleGeneric(call ScmpSyscall, action ScmpAction, exact b
 			return err
 		}
 	} else {
-		// We don't support conditional filtering in library version v2.1
-		if err := checkVersion("conditional filtering", 2, 2, 1); err != nil {
-			return err
-		}
-
 		argsArr := C.make_arg_cmp_array(C.uint(len(conds)))
 		if argsArr == nil {
 			return fmt.Errorf("error allocating memory for conditions")
@@ -731,21 +725,24 @@ func (scmpResp *ScmpNotifResp) toNative(resp *C.struct_seccomp_notif_resp) {
 	resp.flags = C.__u32(scmpResp.Flags)
 }
 
-// checkAPI checks if API level is at least minLevel, and returns an error
-// otherwise. Argument op is an arbitrary string description the operation,
-// and minVersion is the minimally required libseccomp version.
-// Both op and minVersion are only used in an error message.
-func checkAPI(op string, minLevel uint, minVersion string) error {
-	// Ignore error from getAPI -- it returns level == 0 in case of error.
+// checkAPI checks that both the API level and the seccomp version is equal to
+// or greater than the specified minLevel and major, minor, micro,
+// respectively, and returns an error otherwise. Argument op is an arbitrary
+// non-empty operation description, used as a part of the error message
+// returned.
+func checkAPI(op string, minLevel uint, major, minor, micro uint) error {
+	// Ignore error from getAPI, as it returns level == 0 in case of error.
 	level, _ := getAPI()
 	if level >= minLevel {
-		return nil
+		return checkVersion(op, major, minor, micro)
 	}
 	return &VersionError{
 		op:     op,
 		curAPI: level,
 		minAPI: minLevel,
-		minVer: minVersion,
+		major:  major,
+		minor:  minor,
+		micro:  micro,
 	}
 }
 
@@ -753,7 +750,7 @@ func checkAPI(op string, minLevel uint, minVersion string) error {
 // Calls to C.seccomp_notify* hidden from seccomp.go
 
 func notifSupported() error {
-	return checkAPI("seccomp notification", 6, "2.5.0")
+	return checkAPI("seccomp notification", 6, 2, 5, 0)
 }
 
 func (f *ScmpFilter) getNotifFd() (ScmpFd, error) {
@@ -817,7 +814,7 @@ func notifRespond(fd ScmpFd, scmpResp *ScmpNotifResp) error {
 		return err
 	}
 
-	// we only use the reponse here; the request is discarded
+	// we only use the response here; the request is discarded
 	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
 		return errRc(retCode)
 	}

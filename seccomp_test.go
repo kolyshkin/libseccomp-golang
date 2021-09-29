@@ -1,5 +1,3 @@
-// +build linux
-
 // Tests for public API of libseccomp Go bindings
 
 package seccomp
@@ -16,7 +14,7 @@ import (
 )
 
 // execInSubprocess calls the go test binary again for the same test.
-// This must be only top-level statment in the test function. Do not nest this.
+// This must be only top-level statement in the test function. Do not nest this.
 // It will slightly defect the test log output as the test is entered twice
 func execInSubprocess(t *testing.T, f func(t *testing.T)) {
 	const subprocessEnvKey = `GO_SUBPROCESS_KEY`
@@ -32,45 +30,50 @@ func execInSubprocess(t *testing.T, f func(t *testing.T)) {
 			cmd.Args = append(cmd.Args, arg)
 		}
 	}
-	cmd.Env = []string{subprocessEnvKey + "=1"}
+	cmd.Env = append(os.Environ(),
+		subprocessEnvKey+"=1",
+	)
 	cmd.Stdin = os.Stdin
 
-	var b strings.Builder
-	cmd.Stdout = &b
-	cmd.Stderr = &b
-
-	err := cmd.Start()
+	out, err := cmd.CombinedOutput()
+	t.Logf("%s", out)
 	if err != nil {
-		t.Logf("\n%s", b.String())
-		t.Error("failed to spawn test in sub-process", err)
-		t.FailNow()
+		t.Fatal(err)
 	}
+}
 
-	err = cmd.Wait()
-	if err != nil {
-		t.Logf("\n%s", b.String())
-		if err, ok := err.(*exec.ExitError); ok {
-			// err.ExitCode() not available in go1.11
-			// https://github.com/golang/go/issues/26539
-			t.Errorf("Test failed: %v", err.String())
-		}
-		t.Error(`test failed`)
-		t.FailNow()
+func TestExpectedSeccompVersion(t *testing.T) {
+	execInSubprocess(t, subprocessExpectedSeccompVersion)
+}
+
+func subprocessExpectedSeccompVersion(t *testing.T) {
+	// This environment variable can be set by CI.
+	const name = "_EXPECTED_LIBSECCOMP_VERSION"
+
+	expVer := os.Getenv(name)
+	if expVer == "" {
+		t.Skip(name, "not set")
 	}
-	t.Logf("\n%s", b.String())
+	expVer = strings.TrimPrefix(expVer, "v")
+
+	curVer := fmt.Sprintf("%d.%d.%d", verMajor, verMinor, verMicro)
+	t.Logf("testing against libseccomp %s", curVer)
+	if curVer != expVer {
+		t.Fatalf("libseccomp version mismatch: must be %s, got %s", expVer, curVer)
+	}
 }
 
 // Type Function Tests
 
 func APILevelIsSupported() bool {
 	return verMajor > 2 ||
-		(verMajor == 2 && verMinor > 3) ||
-		(verMajor == 2 && verMinor == 3 && verMicro >= 3)
+		(verMajor == 2 && verMinor >= 4)
 }
 
 func TestGetAPILevel(t *testing.T) {
 	execInSubprocess(t, subprocessGetAPILevel)
 }
+
 func subprocessGetAPILevel(t *testing.T) {
 	api, err := GetAPI()
 	if !APILevelIsSupported() {
@@ -90,6 +93,7 @@ func subprocessGetAPILevel(t *testing.T) {
 func TestSetAPILevel(t *testing.T) {
 	execInSubprocess(t, subprocessSetAPILevel)
 }
+
 func subprocessSetAPILevel(t *testing.T) {
 	const expectedAPI = uint(1)
 
@@ -137,7 +141,7 @@ func TestSyscallGetName(t *testing.T) {
 
 	_, err = callFail.GetName()
 	if err == nil {
-		t.Errorf("Getting nonexistant syscall should error!")
+		t.Errorf("Getting nonexistent syscall should error!")
 	}
 }
 
@@ -360,10 +364,10 @@ func TestFilterArchFunctions(t *testing.T) {
 		t.Errorf("Arch not added to filter is present")
 	}
 
-	// Try removing the nonexistant arch - should succeed
+	// Try removing the nonexistent arch - should succeed
 	err = filter.RemoveArch(prospectiveArch)
 	if err != nil {
-		t.Errorf("Error removing nonexistant arch: %s", err)
+		t.Errorf("Error removing nonexistent arch: %s", err)
 	}
 
 	// Add an arch, see if it's in the filter
@@ -420,7 +424,7 @@ func TestFilterAttributeGettersAndSetters(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error getting bad arch action")
 	} else if act != ActAllow {
-		t.Errorf("Bad arch action was not set correcly!")
+		t.Errorf("Bad arch action was not set correctly!")
 	}
 
 	err = filter.SetNoNewPrivsBit(false)
@@ -562,6 +566,7 @@ func TestMergeFilters(t *testing.T) {
 func TestRuleAddAndLoad(t *testing.T) {
 	execInSubprocess(t, subprocessRuleAddAndLoad)
 }
+
 func subprocessRuleAddAndLoad(t *testing.T) {
 	// Test #1: Add a trivial filter
 	filter1, err := NewFilter(ActAllow)
@@ -638,6 +643,7 @@ func subprocessRuleAddAndLoad(t *testing.T) {
 func TestLogAct(t *testing.T) {
 	execInSubprocess(t, subprocessLogAct)
 }
+
 func subprocessLogAct(t *testing.T) {
 	expectedPid := syscall.Getpid()
 
@@ -683,6 +689,7 @@ func subprocessLogAct(t *testing.T) {
 func TestCreateActKillThreadFilter(t *testing.T) {
 	execInSubprocess(t, subprocessCreateActKillThreadFilter)
 }
+
 func subprocessCreateActKillThreadFilter(t *testing.T) {
 	filter, err := NewFilter(ActKillThread)
 	if err != nil {
@@ -697,6 +704,7 @@ func subprocessCreateActKillThreadFilter(t *testing.T) {
 func TestCreateActKillProcessFilter(t *testing.T) {
 	execInSubprocess(t, subprocessCreateActKillProcessFilter)
 }
+
 func subprocessCreateActKillProcessFilter(t *testing.T) {
 	api, err := GetAPI()
 	if err != nil {
@@ -788,24 +796,10 @@ func notifHandler(ch chan error, fd ScmpFd, tests []notifTest) {
 func TestNotif(t *testing.T) {
 	execInSubprocess(t, subprocessNotif)
 }
-func subprocessNotif(t *testing.T) {
-	// seccomp notification requires API level >= 6
-	api, err := GetAPI()
-	if err != nil {
-		if !APILevelIsSupported() {
-			t.Skipf("Skipping test: %s", err)
-		}
 
-		t.Errorf("Error getting API level: %s", err)
-	} else {
-		t.Logf("Got API level %v", api)
-		if api < 6 {
-			err = SetAPI(6)
-			if err != nil {
-				t.Skipf("Skipping test: API level %d is less than 6 and could not set it to 6", api)
-				return
-			}
-		}
+func subprocessNotif(t *testing.T) {
+	if err := notifSupported(); err != nil {
+		t.Skip(err)
 	}
 
 	arch, err := GetNativeArch()
@@ -955,16 +949,10 @@ L:
 func TestNotifUnsupported(t *testing.T) {
 	execInSubprocess(t, subprocessNotifUnsupported)
 }
+
 func subprocessNotifUnsupported(t *testing.T) {
-	// seccomp notification requires API level >= 6
-	api := 0
-	if APILevelIsSupported() {
-		api, err := GetAPI()
-		if err != nil {
-			t.Errorf("Error getting API level: %s", err)
-		} else if api >= 6 {
-			t.Skipf("Skipping test for old libseccomp support: API level %d is >= 6", api)
-		}
+	if err := notifSupported(); err == nil {
+		t.Skip("seccomp notification is supported")
 	}
 
 	filter, err := NewFilter(ActAllow)
@@ -975,6 +963,6 @@ func subprocessNotifUnsupported(t *testing.T) {
 
 	_, err = filter.GetNotifFd()
 	if err == nil {
-		t.Errorf("Error: GetNotifFd was supposed to fail with API level %d", api)
+		t.Error("GetNotifFd: got nil, want error")
 	}
 }
