@@ -19,9 +19,14 @@ jobs:
         run: |
           sudo apt -q update
           sudo apt -q install libseccomp-dev
+    - name: install go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.20.x
+        cache: false # golangci-lint uses own caching
       - uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.51
+          version: v1.54
 
   codespell:
     runs-on: ubuntu-22.04
