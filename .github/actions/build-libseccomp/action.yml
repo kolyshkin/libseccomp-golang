@@ -1,0 +1,58 @@
+name: build libseccomp
+description: Build and install a specific version of libseccomp, and set up the environment to build and test against it.
+inputs:
+  version:
+    description: libseccomp version (git tag/branch) to build. Use vX.X.X to use a release tarball.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: build libseccomp ${{ inputs.version }}
+      shell: bash
+      run: |
+        set -x
+        VER="${{ inputs.version }}"
+        PREFIX="$(pwd)/seccomp-$VER"
+        LIBDIR="$PREFIX/lib"
+
+        if [[ "$VER" == v* ]]; then
+          # Released version: fetch and unpack the release tarball.
+          TAR_FILE="libseccomp-${VER#v}.tar.gz"
+          TAR_URL="https://github.com/seccomp/libseccomp/releases/download/$VER/$TAR_FILE"
+          mkdir libseccomp
+          curl -sSfL "$TAR_URL" | tar -xzf - -C libseccomp --strip-components=1
+          cd libseccomp
+        else
+          # Get it from git.
+          git clone https://github.com/seccomp/libseccomp
+          cd libseccomp
+          git checkout "$VER"
+          # In main branch, configure.ac sets libseccomp version to 0.0.0, which
+          # results in error when compiling libseccomp-golang. While 0.0.0 is
+          # there for a reason, here we need to build and test against HEAD, so
+          # set it to a suitable value.
+          #
+          # Version 9.9.9 is used because:
+          #  - version >= current is needed;
+          #  - chances are good such version won't ever exist;
+          #  - it is easy to spot in tests output;
+          #  - the LIBFILE pattern below expects single digits.
+          if [ "$VER" == "HEAD" ]; then
+            VER=9.9.9
+            sed -i "/^AC_INIT(/s/0\.0\.0/$VER/" configure.ac
+          fi
+          ./autogen.sh
+        fi
+        ./configure --prefix="$PREFIX" --libdir="$LIBDIR"
+        make
+        sudo make install
+        cd -
+        rm -rf libseccomp
+
+        # For the next steps to build and execute with the compiled library.
+        echo "PKG_CONFIG_LIBDIR=$LIBDIR/pkgconfig" >> $GITHUB_ENV
+        LIBFILE="$(echo $LIBDIR/libseccomp.so.?.?.?)"
+        echo "LD_PRELOAD=$LIBFILE" >> $GITHUB_ENV
+        # For TestExpectedSeccompVersion.
+        echo "_EXPECTED_LIBSECCOMP_VERSION=$VER" >> $GITHUB_ENV

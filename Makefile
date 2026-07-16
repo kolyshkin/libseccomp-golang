@@ -1,6 +1,6 @@
 # libseccomp-golang
 
-.PHONY: all check check-build check-syntax fix-syntax vet test lint
+.PHONY: all check check-build check-syntax fix-syntax vet test test-build test-run lint
 
 all: check-build
 
@@ -24,8 +24,13 @@ vet:
 # be noticed earlier in the CI.
 TEST_TIMEOUT=10s
 
-test:
-	go test -v -timeout $(TEST_TIMEOUT)
+test: test-build test-run
+
+test-build:
+	go test -c .
+
+test-run:
+	./libseccomp-golang.test -test.v -test.timeout $(TEST_TIMEOUT)
 
 lint:
 	golangci-lint run .
