@@ -53,6 +53,15 @@ jobs:
     - name: test
       run: make test
 
+    - name: test with system libseccomp
+      run: |
+        # Ensure the system libseccomp is used.
+        unset LD_PRELOAD
+        # Ensure we check we're using the actual system version.
+        export _EXPECTED_LIBSECCOMP_VERSION="$(dpkg-query -W -f='${Version}' libseccomp2 | sed -E 's/^[0-9]+://; s/-[^-]*$//')"
+        # Run the pre-built tests.
+        make test-run
+
     - name: build the latest released libseccomp
       if: matrix.libseccomp != env.LATEST_RELEASED_LIBSECCOMP
       uses: ./.github/actions/build-libseccomp
