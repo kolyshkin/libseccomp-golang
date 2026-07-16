@@ -138,19 +138,19 @@ const uint32_t C_ACT_NOTIFY        = SCMP_ACT_NOTIFY;
 // The libseccomp SCMP_FLTATR_CTL_LOG member of the scmp_filter_attr enum was
 // added in v2.4.0
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-#define SCMP_FLTATR_CTL_LOG _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_LOG 6
 #endif
 
 // The following SCMP_FLTATR_*  were added in libseccomp v2.5.0.
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
-#define SCMP_FLTATR_CTL_SSB      _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_CTL_OPTIMIZE _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_API_SYSRAWRC _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_SSB      7
+#define SCMP_FLTATR_CTL_OPTIMIZE 8
+#define SCMP_FLTATR_API_SYSRAWRC 9
 #endif
 
 // Added in libseccomp v2.6.0.
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
-#define SCMP_FLTATR_CTL_WAITKILL _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_WAITKILL 10
 #endif
 
 const uint32_t C_ATTRIBUTE_DEFAULT  = (uint32_t)SCMP_FLTATR_ACT_DEFAULT;
