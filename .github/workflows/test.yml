@@ -14,8 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         go-version: [1.19.x, 1.25.x, 1.26.x]
-        libseccomp: ["v2.3.3", "v2.4.4", "v2.5.6", "v2.6.0", "HEAD"]
+        libseccomp: ["v2.3.3", "v2.4.4", "v2.5.6", "v2.6.1", "HEAD"]
         os: [ubuntu-24.04, ubuntu-24.04-arm]
+
+    env:
+      LATEST_RELEASED_LIBSECCOMP: v2.6.1
 
     runs-on: ${{ matrix.os }}
 
@@ -24,46 +27,15 @@ jobs:
     - name: checkout
       uses: actions/checkout@v6
 
-    - name: build libseccomp ${{ matrix.libseccomp }}
+    - name: install libseccomp build deps
       run: |
-        set -x
         sudo apt -qq update
         sudo apt -qq install gperf
 
-        PREFIX="$(pwd)/seccomp"
-        LIBDIR="$PREFIX/lib"
-
-        git clone https://github.com/seccomp/libseccomp
-        cd libseccomp
-        git checkout ${{ matrix.libseccomp }}
-        # In main branch, configure.ac sets libseccomp version to 0.0.0, which
-        # results in error when compiling libseccomp-golang. While 0.0.0 is
-        # there for a reason, here we need to build and test against HEAD, so
-        # set it to a suitable value.
-        #
-        # Version 9.9.9 is used because:
-        #  - version >= current is needed;
-        #  - chances are good such version won't ever exist;
-        #  - it is easy to spot in tests output;
-        #  - the LIBFILE pattern below expects single digits.
-        VER="${{ matrix.libseccomp }}"
-        if [ "$VER" == "HEAD" ]; then
-          VER=9.9.9
-          sed -i "/^AC_INIT(/s/0\.0\.0/$VER/" configure.ac
-        fi
-        ./autogen.sh
-        ./configure --prefix="$PREFIX" --libdir="$LIBDIR"
-        make
-        sudo make install
-        cd -
-        rm -rf libseccomp
-
-        # For the next steps to build and execute with the compiled library.
-        echo "PKG_CONFIG_LIBDIR=$LIBDIR/pkgconfig" >> $GITHUB_ENV
-        LIBFILE="$(echo $LIBDIR/libseccomp.so.?.?.?)"
-        echo "LD_PRELOAD=$LIBFILE" >> $GITHUB_ENV
-        # For TestExpectedSeccompVersion.
-        echo "_EXPECTED_LIBSECCOMP_VERSION=$VER" >> $GITHUB_ENV
+    - name: build libseccomp ${{ matrix.libseccomp }}
+      uses: ./.github/actions/build-libseccomp
+      with:
+        version: ${{ matrix.libseccomp }}
 
     - name: install go ${{ matrix.go-version }}
       uses: actions/setup-go@v6
@@ -75,12 +47,22 @@ jobs:
           go.sum
           ${{ env.PKG_CONFIG_LIBDIR }}/libseccomp.pc
 
-
     - name: build
       run: make check-build
 
     - name: test
       run: make test
+
+    - name: build the latest released libseccomp
+      if: matrix.libseccomp != env.LATEST_RELEASED_LIBSECCOMP
+      uses: ./.github/actions/build-libseccomp
+      with:
+        version: ${{ env.LATEST_RELEASED_LIBSECCOMP }}
+
+    - name: test with latest released libseccomp
+      if: matrix.libseccomp != env.LATEST_RELEASED_LIBSECCOMP
+      # Run the test (pre-built with other seccomp version above).
+      run: make test-run
 
   all-done:
     needs:
