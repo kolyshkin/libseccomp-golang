@@ -104,6 +104,44 @@ jobs:
     - name: test
       run: make test
 
+    - name: test against system libseccomp
+      # Run the test binary built above against the distro-provided
+      # libseccomp, which is a different version than the one it was compiled
+      # against. This is exactly the scenario the weak references and the
+      # compile-time/run-time version checks are there for.
+      #
+      # Not done for HEAD, which is built as version 9.9.9, and so needs
+      # libseccomp.so.9, which no distro provides.
+      if: matrix.libseccomp != 'HEAD'
+      run: |
+        set -x
+        # Use distro-provided libseccomp.so.
+        unset LD_PRELOAD
+
+        # Make sure it is indeed the distro-provided library, rather than the
+        # one built above (which lives under $GITHUB_WORKSPACE).
+        LIB="$(ldd ./libseccomp-golang.test | awk '/libseccomp\.so\.2 /{print $3}')"
+        LIB="$(readlink -f "$LIB")"
+        case "$LIB" in
+        "$GITHUB_WORKSPACE"/*) echo "Error: not a system libseccomp: $LIB"; exit 1;;
+        esac
+
+        # The version reported by the package is the lower of the compile-time
+        # and the run-time ones, which is what TestExpectedSeccompVersion has
+        # to expect here.
+        SYS_VER="${LIB##*/libseccomp.so.}"
+        case "$SYS_VER" in
+        [0-9]*.[0-9]*.[0-9]*) ;;
+        *) echo "Error: can not tell the version of $LIB"; exit 1;;
+        esac
+        _EXPECTED_LIBSECCOMP_VERSION="$(printf '%s\n%s\n' \
+                "$_EXPECTED_LIBSECCOMP_VERSION" "$SYS_VER" | sort -V | head -1)"
+        export _EXPECTED_LIBSECCOMP_VERSION
+
+        # Run the pre-built test.
+        make test-run
+
+
   all-done:
     needs:
       - test
