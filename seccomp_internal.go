@@ -261,6 +261,10 @@ int seccomp_notify_respond(int fd, struct seccomp_notif_resp *resp) {
 	return -EOPNOTSUPP;
 }
 
+#define HAVE_NOTIFY 0
+
+#else // seccomp >= 2.5.0
+#define HAVE_NOTIFY 1
 #endif
 */
 import "C"
@@ -294,12 +298,16 @@ const (
 	// Comparison boundaries to check for comparison operator validity
 	compareOpStart ScmpCompareOp = CompareNotEqual
 	compareOpEnd   ScmpCompareOp = CompareMaskedEqual
+	// Whether this package was compiled against libseccomp headers
+	// new enough to provide real seccomp_notify_* functions.
+	notifyAvailable = C.HAVE_NOTIFY != 0
 )
 
 var (
 	// errBadFilter is thrown on bad filter context.
-	errBadFilter = errors.New("filter is invalid or uninitialized")
-	errDefAction = errors.New("requested action matches default action of filter")
+	errBadFilter  = errors.New("filter is invalid or uninitialized")
+	errDefAction  = errors.New("requested action matches default action of filter")
+	errNotifUnsup = errors.New("seccomp notification requires libseccomp >= 2.5.0 at build time")
 	// Constants representing library major, minor, and micro versions
 	verMajor = uint(C.get_major_version())
 	verMinor = uint(C.get_minor_version())
@@ -777,6 +785,9 @@ func checkAPI(op string, minLevel uint, major, minor, micro uint) error {
 // Calls to C.seccomp_notify* hidden from seccomp.go
 
 func notifSupported() error {
+	if !notifyAvailable {
+		return errNotifUnsup
+	}
 	return checkAPI("seccomp notification", 6, 2, 5, 0)
 }
 
