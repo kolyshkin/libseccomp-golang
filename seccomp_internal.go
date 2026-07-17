@@ -186,22 +186,12 @@ unsigned int get_micro_version()
         return seccomp_version()->micro;
 }
 
-// The libseccomp API level functions were added in v2.4.0
+// The libseccomp API level functions were added in v2.4.0; headers
+// older than that don't declare seccomp_api_get()/seccomp_api_set() at
+// all. See seccomp_api_compat.h for why the fallback used in that case
+// lives in its own file instead of being defined here directly.
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-const unsigned int seccomp_api_get(void)
-{
-	// libseccomp-golang requires libseccomp v2.2.0, at a minimum, which
-	// supported API level 2. However, the kernel may not support API level
-	// 2 constructs which are the seccomp() system call and the TSYNC
-	// filter flag. Return the "reserved" value of 0 here to indicate that
-	// proper API level support is not available in libseccomp.
-	return 0;
-}
-
-int seccomp_api_set(unsigned int level)
-{
-	return -EOPNOTSUPP;
-}
+#include "seccomp_api_compat.h"
 #endif
 
 typedef struct scmp_arg_cmp* scmp_cast_t;
