@@ -18,26 +18,7 @@ import (
 )
 
 /*
-#include <errno.h>
-#include <stdlib.h>
-#include <seccomp.h>
-
-// The following functions were added in libseccomp v2.6.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
-int seccomp_precompute(scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_export_bpf_mem(const scmp_filter_ctx ctx, void *buf, size_t *len)  {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_start(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_commit(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_transaction_reject(const scmp_filter_ctx ctx) {}
-#endif
+#include "seccomp_compat.h"
 */
 import "C"
 

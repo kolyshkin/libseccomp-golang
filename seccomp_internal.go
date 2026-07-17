@@ -22,67 +22,9 @@ import (
 
 // #cgo pkg-config: libseccomp
 /*
-#include <errno.h>
-#include <stdlib.h>
-#include <seccomp.h>
-
-#if (SCMP_VER_MAJOR < 2) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 3) || \
-    (SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 3 && SCMP_VER_MICRO < 1)
-#error This package requires libseccomp >= v2.3.1
-#endif
-
-#define ARCH_BAD ~0
+#include "seccomp_compat.h"
 
 const uint32_t C_ARCH_BAD = ARCH_BAD;
-
-#ifndef SCMP_ARCH_PPC
-#define SCMP_ARCH_PPC ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PPC64
-#define SCMP_ARCH_PPC64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PPC64LE
-#define SCMP_ARCH_PPC64LE ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_S390
-#define SCMP_ARCH_S390 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_S390X
-#define SCMP_ARCH_S390X ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PARISC
-#define SCMP_ARCH_PARISC ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_PARISC64
-#define SCMP_ARCH_PARISC64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_RISCV64
-#define SCMP_ARCH_RISCV64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_LOONGARCH64
-#define SCMP_ARCH_LOONGARCH64 ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_M68K
-#define SCMP_ARCH_M68K ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_SH
-#define SCMP_ARCH_SH ARCH_BAD
-#endif
-
-#ifndef SCMP_ARCH_SHEB
-#define SCMP_ARCH_SHEB ARCH_BAD
-#endif
 
 const uint32_t C_ARCH_NATIVE       = SCMP_ARCH_NATIVE;
 const uint32_t C_ARCH_X86          = SCMP_ARCH_X86;
@@ -109,22 +51,6 @@ const uint32_t C_ARCH_M68K         = SCMP_ARCH_M68K;
 const uint32_t C_ARCH_SH           = SCMP_ARCH_SH;
 const uint32_t C_ARCH_SHEB         = SCMP_ARCH_SHEB;
 
-#ifndef SCMP_ACT_LOG
-#define SCMP_ACT_LOG 0x7ffc0000U
-#endif
-
-#ifndef SCMP_ACT_KILL_PROCESS
-#define SCMP_ACT_KILL_PROCESS 0x80000000U
-#endif
-
-#ifndef SCMP_ACT_KILL_THREAD
-#define SCMP_ACT_KILL_THREAD	0x00000000U
-#endif
-
-#ifndef SCMP_ACT_NOTIFY
-#define SCMP_ACT_NOTIFY 0x7fc00000U
-#endif
-
 const uint32_t C_ACT_KILL          = SCMP_ACT_KILL;
 const uint32_t C_ACT_KILL_PROCESS  = SCMP_ACT_KILL_PROCESS;
 const uint32_t C_ACT_KILL_THREAD   = SCMP_ACT_KILL_THREAD;
@@ -134,24 +60,6 @@ const uint32_t C_ACT_TRACE         = SCMP_ACT_TRACE(0);
 const uint32_t C_ACT_LOG           = SCMP_ACT_LOG;
 const uint32_t C_ACT_ALLOW         = SCMP_ACT_ALLOW;
 const uint32_t C_ACT_NOTIFY        = SCMP_ACT_NOTIFY;
-
-// The libseccomp SCMP_FLTATR_CTL_LOG member of the scmp_filter_attr enum was
-// added in v2.4.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-#define SCMP_FLTATR_CTL_LOG _SCMP_FLTATR_MIN
-#endif
-
-// The following SCMP_FLTATR_*  were added in libseccomp v2.5.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
-#define SCMP_FLTATR_CTL_SSB      _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_CTL_OPTIMIZE _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_API_SYSRAWRC _SCMP_FLTATR_MIN
-#endif
-
-// Added in libseccomp v2.6.0.
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
-#define SCMP_FLTATR_CTL_WAITKILL _SCMP_FLTATR_MIN
-#endif
 
 const uint32_t C_ATTRIBUTE_DEFAULT  = (uint32_t)SCMP_FLTATR_ACT_DEFAULT;
 const uint32_t C_ATTRIBUTE_BADARCH  = (uint32_t)SCMP_FLTATR_ACT_BADARCH;
@@ -186,23 +94,6 @@ unsigned int get_micro_version()
         return seccomp_version()->micro;
 }
 
-// The libseccomp API level functions were added in v2.4.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
-const unsigned int seccomp_api_get(void)
-{
-	// libseccomp-golang requires libseccomp v2.2.0, at a minimum, which
-	// supported API level 2. However, the kernel may not support API level
-	// 2 constructs which are the seccomp() system call and the TSYNC
-	// filter flag. Return the "reserved" value of 0 here to indicate that
-	// proper API level support is not available in libseccomp.
-	return 0;
-}
-
-int seccomp_api_set(unsigned int level)
-{
-	return -EOPNOTSUPP;
-}
-#endif
 
 typedef struct scmp_arg_cmp* scmp_cast_t;
 
@@ -229,49 +120,6 @@ void add_struct_arg_cmp(
         return;
 }
 
-// The seccomp notify API functions were added in v2.5.0
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
-
-struct seccomp_data {
-	int nr;
-	__u32 arch;
-	__u64 instruction_pointer;
-	__u64 args[6];
-};
-
-struct seccomp_notif {
-	__u64 id;
-	__u32 pid;
-	__u32 flags;
-	struct seccomp_data data;
-};
-
-struct seccomp_notif_resp {
-	__u64 id;
-	__s64 val;
-	__s32 error;
-	__u32 flags;
-};
-
-int seccomp_notify_alloc(struct seccomp_notif **req, struct seccomp_notif_resp **resp) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_fd(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_notify_free(struct seccomp_notif *req, struct seccomp_notif_resp *resp) {
-}
-int seccomp_notify_id_valid(int fd, uint64_t id) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_receive(int fd, struct seccomp_notif *req) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_respond(int fd, struct seccomp_notif_resp *resp) {
-	return -EOPNOTSUPP;
-}
-
-#endif
 */
 import "C"
 
