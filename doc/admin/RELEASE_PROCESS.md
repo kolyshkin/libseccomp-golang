@@ -9,14 +9,14 @@ libseccomp-golang release.
 
   * https://github.com/seccomp/libseccomp-golang/milestones
 
-#### 2. Verify that the syntax/style meets the guidelines
+#### 2. Verify that the syntax/style meets the guidelines, and the tests run without error
 
-	% make check-syntax
-
-#### 3. Verify that the bundled tests run without error
-
-	% make vet
 	% make check
+
+#### 3. Verify that CI is passing
+
+Open the following URL and check that latest CI runs are green:
+https://github.com/seccomp/libseccomp-golang/actions?query=event%3Apush
 
 #### 4. If any problems were found up to this point that resulted in code changes, restart the process
 

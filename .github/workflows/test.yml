@@ -96,7 +96,7 @@ jobs:
 
 
     - name: build
-      run: make check-build
+      run: make build
 
     - name: test
       run: make test
