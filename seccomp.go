@@ -26,6 +26,10 @@ import "C"
 
 // VersionError represents an error when either the system libseccomp version
 // or the kernel version is too old to perform the operation requested.
+//
+// The libseccomp version it reports is the effective one, that is the lower of
+// the compile-time and the run-time versions (see [GetLibraryVersion]), since
+// an operation needs to be available in both.
 type VersionError struct {
 	op                  string // operation that failed or would fail
 	major, minor, micro uint   // minimally required libseccomp version
@@ -43,11 +47,11 @@ func init() {
 func (e VersionError) Error() string {
 	if e.minAPI != 0 {
 		return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d and API level >= %d "+
-			"(current version: %d.%d.%d, API level: %d)",
+			"(effective version: %d.%d.%d, API level: %d)",
 			e.op, e.major, e.minor, e.micro, e.minAPI,
 			verMajor, verMinor, verMicro, e.curAPI)
 	}
-	return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d (current version: %d.%d.%d)",
+	return fmt.Sprintf("%s requires libseccomp >= %d.%d.%d (effective version: %d.%d.%d)",
 		e.op, e.major, e.minor, e.micro, verMajor, verMinor, verMicro)
 }
 
@@ -450,8 +454,8 @@ func (a ScmpAction) GetReturnCode() int16 {
 
 // General utility functions
 
-// GetLibraryVersion returns the version of the library the bindings are built
-// against.
+// GetLibraryVersion returns the version of the libseccomp library used,
+// which is the lower of the compile-time and run-time versions.
 // The version is formatted as follows: Major.Minor.Micro
 func GetLibraryVersion() (major, minor, micro uint) {
 	return verMajor, verMinor, verMicro

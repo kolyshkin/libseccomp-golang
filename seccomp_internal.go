@@ -79,22 +79,6 @@ const int      C_CMP_GE            = (int)SCMP_CMP_GE;
 const int      C_CMP_GT            = (int)SCMP_CMP_GT;
 const int      C_CMP_MASKED_EQ     = (int)SCMP_CMP_MASKED_EQ;
 
-unsigned int get_major_version()
-{
-        return seccomp_version()->major;
-}
-
-unsigned int get_minor_version()
-{
-        return seccomp_version()->minor;
-}
-
-unsigned int get_micro_version()
-{
-        return seccomp_version()->micro;
-}
-
-
 typedef struct scmp_arg_cmp* scmp_cast_t;
 
 void* make_arg_cmp_array(unsigned int length)
@@ -158,24 +142,42 @@ var (
 	// errBadFilter is thrown on bad filter context.
 	errBadFilter = errors.New("filter is invalid or uninitialized")
 	errDefAction = errors.New("requested action matches default action of filter")
-	// Constants representing library major, minor, and micro versions
-	verMajor = uint(C.get_major_version())
-	verMinor = uint(C.get_minor_version())
-	verMicro = uint(C.get_micro_version())
+	// libseccomp major, minor, and micro version numbers. Used by checkVersion.
+	verMajor, verMinor, verMicro = getMinVersion()
 )
+
+// versionGE reports whether (major1,minor1,micro1) >= (major2,minor2,micro2).
+func versionGE(major1, minor1, micro1, major2, minor2, micro2 uint) bool {
+	return (major1 > major2) ||
+		(major1 == major2 && minor1 > minor2) ||
+		(major1 == major2 && minor1 == minor2 && micro1 >= micro2)
+}
+
+func getMinVersion() (uint, uint, uint) {
+	runVer := C.seccomp_version()
+
+	cMajor, cMinor, cMicro := uint(C.SCMP_VER_MAJOR), uint(C.SCMP_VER_MINOR), uint(C.SCMP_VER_MICRO)
+	rMajor, rMinor, rMicro := uint(runVer.major), uint(runVer.minor), uint(runVer.micro)
+	if versionGE(rMajor, rMinor, rMicro, cMajor, cMinor, cMicro) {
+		return cMajor, cMinor, cMicro
+	}
+	return rMajor, rMinor, rMicro
+}
 
 // Nonexported functions
 
-// checkVersion returns an error if the libseccomp version being used
-// is less than the one specified by major, minor, and micro arguments.
+// checkVersion returns an error if the libseccomp version is less than the one
+// specified by major, minor, and micro arguments.
+//
+// Since this package may be compiled with one version of libseccomp and
+// used with another, we use the older one to be on the safe side.
+//
 // Argument op is an arbitrary non-empty operation description, which
 // is used as a part of the error message returned.
 //
 // Most users should use checkAPI instead.
 func checkVersion(op string, major, minor, micro uint) error {
-	if (verMajor > major) ||
-		(verMajor == major && verMinor > minor) ||
-		(verMajor == major && verMinor == minor && verMicro >= micro) {
+	if versionGE(verMajor, verMinor, verMicro, major, minor, micro) {
 		return nil
 	}
 	return &VersionError{
