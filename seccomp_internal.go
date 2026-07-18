@@ -195,7 +195,8 @@ func ensureSupportedVersion() error {
 	return checkVersion("seccomp", 2, 3, 1)
 }
 
-// Get the API level
+// Get the API level, capped to the compile-time supported maximum (see
+// getMinVersion for why this cap is needed).
 func getAPI() (uint, error) {
 	// The API level operations were added in libseccomp v2.4.0 and, like
 	// any other functionality, have to be available at both compile and
@@ -210,12 +211,15 @@ func getAPI() (uint, error) {
 		return 0, errAPIUnsupported
 	}
 
-	api := C.compat_api_get()
+	api := uint(C.compat_api_get())
 	if api == 0 {
 		return 0, errAPIUnsupported
 	}
+	if maxAPI := uint(C.SCMP_COMPAT_MAX_API_LEVEL); api > maxAPI {
+		api = maxAPI
+	}
 
-	return uint(api), nil
+	return api, nil
 }
 
 // Set the API level

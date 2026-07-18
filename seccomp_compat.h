@@ -204,4 +204,28 @@ int compat_transaction_start(const scmp_filter_ctx ctx);
 int compat_transaction_commit(const scmp_filter_ctx ctx);
 void compat_transaction_reject(const scmp_filter_ctx ctx);
 
+
+// The highest API level that can possibly be supported by the compile-time
+// libseccomp headers, regardless of what the run-time library reports. This
+// mirrors the version gates in the Go code, which use the lower of the
+// compile-time and the run-time version: functionality added after the
+// compile-time version can never be used, even if a newer library is loaded
+// at run time.
+//
+// The API level to version mapping is documented in the seccomp_api_get(3)
+// man page.
+#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
+#define SCMP_COMPAT_MAX_API_LEVEL 2
+#elif SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 4
+#define SCMP_COMPAT_MAX_API_LEVEL 3
+#elif SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR == 5
+#define SCMP_COMPAT_MAX_API_LEVEL 6
+#else
+// TODO: bump this (and add a branch above) whenever a new libseccomp
+// version introduces a new API level. Until then, a newer libseccomp is
+// capped to the highest level known here, which is the safe direction to
+// err in, but does mean its new functionality stays unavailable.
+#define SCMP_COMPAT_MAX_API_LEVEL 7
+#endif
+
 #endif // SECCOMP_COMPAT_H

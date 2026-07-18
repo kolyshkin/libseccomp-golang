@@ -461,7 +461,8 @@ func GetLibraryVersion() (major, minor, micro uint) {
 	return verMajor, verMinor, verMicro
 }
 
-// GetAPI returns the API level supported by the system.
+// GetAPI returns the API level supported by the system, which is the lower of
+// the compile-time and run-time supported levels.
 // Returns a positive int containing the API level, or 0 with an error if the
 // API level could not be detected due to the library being older than v2.4.0.
 // See the seccomp_api_get(3) man page for details on available API levels:
