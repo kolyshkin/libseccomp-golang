@@ -1078,7 +1078,7 @@ func TestTransaction(t *testing.T) {
 }
 
 func testTransaction(t *testing.T) {
-	if err := checkAPI("seccomp transaction support", 0, 2, 6, 0); err != nil {
+	if err := checkVersion("seccomp transaction support", 2, 6, 0); err != nil {
 		t.Skip(err)
 	}
 
@@ -1112,7 +1112,7 @@ func TestTransactionUnsupported(t *testing.T) {
 }
 
 func testTransactionUnsupported(t *testing.T) {
-	if checkAPI("seccomp transaction support", 0, 2, 6, 0) == nil {
+	if checkVersion("seccomp transaction support", 2, 6, 0) == nil {
 		t.Skip("seccomp transaction is supported")
 	}
 
