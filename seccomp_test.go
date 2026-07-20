@@ -4,7 +4,6 @@ package seccomp
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -615,6 +614,21 @@ func subprocessRuleAddPrecomputeAndLoad(t *testing.T) {
 	doSubprocessRuleAddAndLoad(t, true)
 }
 
+// checkVersionedErr checks that err, as returned by the operation named by op,
+// is nil if that operation is supported by the libseccomp used, and non-nil
+// otherwise.
+func checkVersionedErr(t *testing.T, op string, err error, major, minor, micro uint) {
+	t.Helper()
+
+	if checkVersion(op, major, minor, micro) == nil {
+		if err != nil {
+			t.Errorf("%s: want nil, got %v", op, err)
+		}
+	} else if err == nil {
+		t.Errorf("%s: want error, got nil", op)
+	}
+}
+
 func doSubprocessRuleAddAndLoad(t *testing.T, precompute bool) {
 	// Test #1: Add a trivial filter
 	filter1, err := NewFilter(ActAllow)
@@ -669,16 +683,9 @@ func doSubprocessRuleAddAndLoad(t *testing.T, precompute bool) {
 	}
 
 	if precompute {
-		expErr := error(nil)
-		// Precompute needs seccomp 2.6.0 and API level 7.
-		if checkAPI(t.Name(), 7, 2, 6, 0) != nil {
-			expErr = syscall.EOPNOTSUPP
-		}
-
 		err = filter1.Precompute()
-		if !errors.Is(err, expErr) {
-			t.Errorf("Precompute: want %v, got %v", expErr, err)
-		}
+		// Precompute needs seccomp 2.6.0.
+		checkVersionedErr(t, "Precompute", err, 2, 6, 0)
 	}
 
 	err = filter1.Load()
@@ -816,15 +823,9 @@ func subprocessExportBPF(t *testing.T) {
 	}
 	t.Logf("ExportBPF: size %d", len(contents))
 
-	expErr := error(nil)
-	// ExportBPFMem needs seccomp 2.6.0.
-	if checkAPI(t.Name(), 0, 2, 6, 0) != nil {
-		expErr = syscall.EOPNOTSUPP
-	}
 	contentsMem, err := filter.ExportBPFMem()
-	if err != expErr {
-		t.Errorf("ExportBPFMem: want %v, got %v", expErr, err)
-	}
+	// ExportBPFMem needs seccomp 2.6.0.
+	checkVersionedErr(t, "ExportBPFMem", err, 2, 6, 0)
 	if err == nil {
 		t.Logf("ExportBPFMem: size %d", len(contents))
 		if !bytes.Equal(contents, contentsMem) {
