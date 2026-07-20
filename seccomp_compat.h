@@ -86,7 +86,7 @@
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
 
 // SCMP_FLTATR_CTL_LOG was added in v2.4.0.
-#define SCMP_FLTATR_CTL_LOG _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_LOG 6
 
 // The libseccomp API level functions were added in v2.4.0.
 // Fallback implementations live in seccomp_compat.c.
@@ -99,9 +99,9 @@ int seccomp_api_set(unsigned int level);
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
 
 // The following SCMP_FLTATR_*  were added in libseccomp v2.5.0.
-#define SCMP_FLTATR_CTL_SSB      _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_CTL_OPTIMIZE _SCMP_FLTATR_MIN
-#define SCMP_FLTATR_API_SYSRAWRC _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_SSB      7
+#define SCMP_FLTATR_CTL_OPTIMIZE 8
+#define SCMP_FLTATR_API_SYSRAWRC 9
 
 // The seccomp notify API structs and functions were added in v2.5.0.
 // Fallback implementations live in seccomp_compat.c.
@@ -139,7 +139,7 @@ int seccomp_notify_respond(int fd, struct seccomp_notif_resp *resp);
 
 #if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
 
-#define SCMP_FLTATR_CTL_WAITKILL _SCMP_FLTATR_MIN
+#define SCMP_FLTATR_CTL_WAITKILL 10
 
 // The following functions were added in libseccomp v2.6.0.
 // Fallback implementations live in seccomp_compat.c.
