@@ -25,6 +25,12 @@ jobs:
       uses: actions/checkout@v7
 
     - name: build libseccomp ${{ matrix.libseccomp }}
+      env:
+        # sha256 checksums for libseccomp release tarballs.
+        SHA256_2_3_3: 7fc28f4294cc72e61c529bedf97e705c3acf9c479a8f1a3028d4cd2ca9f3b155
+        SHA256_2_4_4: 4e79738d1ef3c9b7ca9769f1f8b8d84fc17143c2c1c432e53b9c64787e0ff3eb
+        SHA256_2_5_6: 04c37d72965dce218a0c94519b056e1775cf786b5260ee2b7992956c4ee38633
+        SHA256_2_6_1: 501f66c667225d53791b97e1d7cf85ab764c297d04881f60f38f451c4b0ee1be
       run: |
         set -x
         sudo apt -qq update
@@ -33,25 +39,38 @@ jobs:
         PREFIX="$(pwd)/seccomp"
         LIBDIR="$PREFIX/lib"
 
-        git clone https://github.com/seccomp/libseccomp
-        cd libseccomp
-        git checkout ${{ matrix.libseccomp }}
-        # In main branch, configure.ac sets libseccomp version to 0.0.0, which
-        # results in error when compiling libseccomp-golang. While 0.0.0 is
-        # there for a reason, here we need to build and test against HEAD, so
-        # set it to a suitable value.
-        #
-        # Version 9.9.9 is used because:
-        #  - version >= current is needed;
-        #  - chances are good such version won't ever exist;
-        #  - it is easy to spot in tests output;
-        #  - the LIBFILE pattern below expects single digits.
         VER="${{ matrix.libseccomp }}"
-        if [ "$VER" == "HEAD" ]; then
+        if [[ "$VER" == v* ]]; then
+          # A specific release: fetch and verify the release tarball
+          # instead of cloning the whole repo.
+          mkdir libseccomp
+          cd libseccomp
+          VER="${VER#v}"
+          TAR="libseccomp-$VER.tar.gz"
+          CKSUM_VAR="SHA256_${VER//./_}"
+          curl -fsSL --remote-name "https://github.com/seccomp/libseccomp/releases/download/v$VER/$TAR"
+          sha256sum --strict --check - <<<"${!CKSUM_VAR} *$TAR"
+          tar --strip-components=1 -xzf "$TAR"
+          rm -f "$TAR"
+        else
+          # Any other git tag/branch/sha: clone and build from the repo.
+          git clone https://github.com/seccomp/libseccomp
+          cd libseccomp
+          git checkout $VER
+          # In main branch, configure.ac sets libseccomp version to 0.0.0, which
+          # results in error when compiling libseccomp-golang. While 0.0.0 is
+          # there for a reason, here we need to build and test against HEAD, so
+          # set it to a suitable value.
+          #
+          # Version 9.9.9 is used because:
+          #  - version >= current is needed;
+          #  - chances are good such version won't ever exist;
+          #  - it is easy to spot in tests output;
+          #  - the LIBFILE pattern below expects single digits.
           VER=9.9.9
           sed -i "/^AC_INIT(/s/0\.0\.0/$VER/" configure.ac
+          ./autogen.sh
         fi
-        ./autogen.sh
         ./configure --prefix="$PREFIX" --libdir="$LIBDIR"
         make
         sudo make install
