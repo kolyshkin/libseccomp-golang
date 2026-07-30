@@ -13,8 +13,8 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: stable
       - name: install deps
@@ -23,16 +23,16 @@ jobs:
           sudo apt -q install libseccomp-dev
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: v2.12
 
   codespell:
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: install deps
       # Version of codespell bundled with Ubuntu will become old, so use pip.
       # OTOH, we want to pin it to specific version to avoid breaking CI.
-      run: pip install --break-system-packages codespell==v2.4.2
+      run: pip install --break-system-packages codespell==v2.4.3
     - name: run codespell
       run: codespell
 
