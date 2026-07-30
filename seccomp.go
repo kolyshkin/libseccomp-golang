@@ -836,7 +836,7 @@ func (f *ScmpFilter) Precompute() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_precompute(f.filterCtx); retCode != 0 {
+	if retCode := C.compat_precompute(f.filterCtx); retCode != 0 {
 		return errRc(retCode)
 	}
 
@@ -1249,12 +1249,12 @@ func (f *ScmpFilter) ExportBPFMem() ([]byte, error) {
 
 	var len C.size_t
 	// Get the size required.
-	if retCode := C.seccomp_export_bpf_mem(f.filterCtx, unsafe.Pointer(nil), &len); retCode < 0 {
+	if retCode := C.compat_export_bpf_mem(f.filterCtx, unsafe.Pointer(nil), &len); retCode < 0 {
 		return nil, errRc(retCode)
 	}
 	// Get the data.
 	buf := make([]byte, int(len))
-	if retCode := C.seccomp_export_bpf_mem(f.filterCtx, unsafe.Pointer(&buf[0]), &len); retCode < 0 {
+	if retCode := C.compat_export_bpf_mem(f.filterCtx, unsafe.Pointer(&buf[0]), &len); retCode < 0 {
 		return nil, errRc(retCode)
 	}
 
@@ -1309,7 +1309,7 @@ func (f *ScmpFilter) TransactionStart() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_transaction_start(f.filterCtx); retCode < 0 {
+	if retCode := C.compat_transaction_start(f.filterCtx); retCode < 0 {
 		return errRc(retCode)
 	}
 
@@ -1325,7 +1325,7 @@ func (f *ScmpFilter) TransactionReject() {
 		return
 	}
 
-	C.seccomp_transaction_reject(f.filterCtx)
+	C.compat_transaction_reject(f.filterCtx)
 }
 
 // TransactionCommit commits a transaction started by [TransactionStart].
@@ -1337,7 +1337,7 @@ func (f *ScmpFilter) TransactionCommit() error {
 		return errBadFilter
 	}
 
-	if retCode := C.seccomp_transaction_commit(f.filterCtx); retCode < 0 {
+	if retCode := C.compat_transaction_commit(f.filterCtx); retCode < 0 {
 		return errRc(retCode)
 	}
 

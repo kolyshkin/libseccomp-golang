@@ -1,72 +1,121 @@
-// Fallback implementations for libseccomp functionality that is missing in
-// older libseccomp headers/libraries. Declarations, and the version checks
-// that gate them, live in seccomp_compat.h.
+// Wrappers around libseccomp functionality that may be missing from the
+// run-time libseccomp library. The functions wrapped here are declared as weak
+// references (see seccomp_compat.h), meaning they resolve to NULL when the
+// run-time library is older than the version that added them, so they must not
+// be called directly.
 
 #include "seccomp_compat.h"
 
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 4
+// The API level operations were added in libseccomp v2.4.0.
 
-// The libseccomp API level functions were added in v2.4.0.
-const unsigned int seccomp_api_get(void)
+unsigned int compat_api_get(void)
 {
-	// libseccomp-golang requires libseccomp v2.3.1, at a minimum, which
-	// supported API level 2. However, the kernel may not support API level
-	// 2 constructs which are the seccomp() system call and the TSYNC
-	// filter flag. Return the "reserved" value of 0 here to indicate that
-	// proper API level support is not available in libseccomp.
-	return 0;
+	// Return the "reserved" value of 0 to tell the caller that proper API
+	// level support is not available in libseccomp.
+	if (seccomp_api_get == NULL)
+		return 0;
+
+	return seccomp_api_get();
 }
 
-int seccomp_api_set(unsigned int level)
+int compat_api_set(unsigned int level)
 {
-	return -EOPNOTSUPP;
+	if (seccomp_api_set == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_api_set(level);
 }
 
-#endif // < 2.4.0
 
+// The seccomp notify API was added in libseccomp v2.5.0.
 
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 5
+int compat_notify_alloc(struct seccomp_notif **req, struct seccomp_notif_resp **resp)
+{
+	if (seccomp_notify_alloc == NULL)
+		return -EOPNOTSUPP;
 
-// The seccomp notify API functions were added in v2.5.0.
-
-int seccomp_notify_alloc(struct seccomp_notif **req, struct seccomp_notif_resp **resp) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_fd(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_notify_free(struct seccomp_notif *req, struct seccomp_notif_resp *resp) {
-}
-int seccomp_notify_id_valid(int fd, uint64_t id) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_receive(int fd, struct seccomp_notif *req) {
-	return -EOPNOTSUPP;
-}
-int seccomp_notify_respond(int fd, struct seccomp_notif_resp *resp) {
-	return -EOPNOTSUPP;
+	return seccomp_notify_alloc(req, resp);
 }
 
-#endif // < 2.5.0
+int compat_notify_fd(const scmp_filter_ctx ctx)
+{
+	if (seccomp_notify_fd == NULL)
+		return -EOPNOTSUPP;
 
+	return seccomp_notify_fd(ctx);
+}
 
-#if SCMP_VER_MAJOR == 2 && SCMP_VER_MINOR < 6
+void compat_notify_free(struct seccomp_notif *req, struct seccomp_notif_resp *resp)
+{
+	if (seccomp_notify_free == NULL)
+		return;
+
+	seccomp_notify_free(req, resp);
+}
+
+int compat_notify_id_valid(int fd, uint64_t id)
+{
+	if (seccomp_notify_id_valid == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_notify_id_valid(fd, id);
+}
+
+int compat_notify_receive(int fd, struct seccomp_notif *req)
+{
+	if (seccomp_notify_receive == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_notify_receive(fd, req);
+}
+
+int compat_notify_respond(int fd, struct seccomp_notif_resp *resp)
+{
+	if (seccomp_notify_respond == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_notify_respond(fd, resp);
+}
+
 
 // The following functions were added in libseccomp v2.6.0.
 
-int seccomp_precompute(scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_export_bpf_mem(const scmp_filter_ctx ctx, void *buf, size_t *len)  {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_start(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-int seccomp_transaction_commit(const scmp_filter_ctx ctx) {
-	return -EOPNOTSUPP;
-}
-void seccomp_transaction_reject(const scmp_filter_ctx ctx) {
+int compat_precompute(scmp_filter_ctx ctx)
+{
+	if (seccomp_precompute == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_precompute(ctx);
 }
 
-#endif // < 2.6.0
+int compat_export_bpf_mem(const scmp_filter_ctx ctx, void *buf, size_t *len)
+{
+	if (seccomp_export_bpf_mem == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_export_bpf_mem(ctx, buf, len);
+}
+
+int compat_transaction_start(const scmp_filter_ctx ctx)
+{
+	if (seccomp_transaction_start == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_transaction_start(ctx);
+}
+
+int compat_transaction_commit(const scmp_filter_ctx ctx)
+{
+	if (seccomp_transaction_commit == NULL)
+		return -EOPNOTSUPP;
+
+	return seccomp_transaction_commit(ctx);
+}
+
+void compat_transaction_reject(const scmp_filter_ctx ctx)
+{
+	if (seccomp_transaction_reject == NULL)
+		return;
+
+	seccomp_transaction_reject(ctx);
+}

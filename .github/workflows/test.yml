@@ -98,6 +98,9 @@ jobs:
     - name: build
       run: make build
 
+    - name: check symbols
+      run: make check-symbols
+
     - name: test
       run: make test
 

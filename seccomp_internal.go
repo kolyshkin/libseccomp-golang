@@ -142,6 +142,9 @@ var (
 	// errBadFilter is thrown on bad filter context.
 	errBadFilter = errors.New("filter is invalid or uninitialized")
 	errDefAction = errors.New("requested action matches default action of filter")
+	// errAPIUnsupported is returned when the libseccomp used lacks the API
+	// level operations, added in v2.4.0.
+	errAPIUnsupported = errors.New("API level operations are not supported")
 	// libseccomp major, minor, and micro version numbers. Used by checkVersion.
 	verMajor, verMinor, verMicro = getMinVersion()
 )
@@ -194,9 +197,22 @@ func ensureSupportedVersion() error {
 
 // Get the API level
 func getAPI() (uint, error) {
-	api := C.seccomp_api_get()
+	// The API level operations were added in libseccomp v2.4.0 and, like
+	// any other functionality, have to be available at both compile and
+	// run time. This is the one place that can not use checkAPI, the API
+	// level being the very thing the latter checks.
+	//
+	// Note that while the minimally required libseccomp v2.3.1 does support
+	// API level 2, the kernel may not support the API level 2 constructs
+	// (the seccomp() system call and the TSYNC filter flag), so no API
+	// level is assumed here.
+	if checkVersion("API level operations", 2, 4, 0) != nil {
+		return 0, errAPIUnsupported
+	}
+
+	api := C.compat_api_get()
 	if api == 0 {
-		return 0, errors.New("API level operations are not supported")
+		return 0, errAPIUnsupported
 	}
 
 	return uint(api), nil
@@ -204,10 +220,15 @@ func getAPI() (uint, error) {
 
 // Set the API level
 func setAPI(api uint) error {
-	if retCode := C.seccomp_api_set(C.uint(api)); retCode != 0 {
+	// See the comment in getAPI.
+	if checkVersion("API level operations", 2, 4, 0) != nil {
+		return errAPIUnsupported
+	}
+
+	if retCode := C.compat_api_set(C.uint(api)); retCode != 0 {
 		e := errRc(retCode)
 		if e == syscall.EOPNOTSUPP {
-			return errors.New("API level operations are not supported")
+			return errAPIUnsupported
 		}
 
 		return fmt.Errorf("could not set API level: %w", e)
@@ -634,7 +655,8 @@ func checkAPI(op string, minLevel uint, major, minor, micro uint) error {
 }
 
 // Userspace Notification API
-// Calls to C.seccomp_notify* hidden from seccomp.go
+// Calls to C.compat_notify* (thin wrappers around the libseccomp
+// seccomp_notify* functions) hidden from seccomp.go
 
 func notifSupported() error {
 	return checkAPI("seccomp notification", 6, 2, 5, 0)
@@ -651,7 +673,7 @@ func (f *ScmpFilter) getNotifFd() (ScmpFd, error) {
 		return -1, err
 	}
 
-	fd := C.seccomp_notify_fd(f.filterCtx)
+	fd := C.compat_notify_fd(f.filterCtx)
 
 	return ScmpFd(fd), nil
 }
@@ -665,13 +687,13 @@ func notifReceive(fd ScmpFd) (*ScmpNotifReq, error) {
 	}
 
 	// we only use the request here; the response is unused
-	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
+	if retCode := C.compat_notify_alloc(&req, &resp); retCode != 0 {
 		return nil, errRc(retCode)
 	}
-	defer C.seccomp_notify_free(req, resp)
+	defer C.compat_notify_free(req, resp)
 
 	for {
-		retCode, errno := C.seccomp_notify_receive(C.int(fd), req)
+		retCode, errno := C.compat_notify_receive(C.int(fd), req)
 		if retCode == 0 {
 			break
 		}
@@ -699,15 +721,15 @@ func notifRespond(fd ScmpFd, scmpResp *ScmpNotifResp) error {
 	}
 
 	// we only use the response here; the request is discarded
-	if retCode := C.seccomp_notify_alloc(&req, &resp); retCode != 0 {
+	if retCode := C.compat_notify_alloc(&req, &resp); retCode != 0 {
 		return errRc(retCode)
 	}
-	defer C.seccomp_notify_free(req, resp)
+	defer C.compat_notify_free(req, resp)
 
 	scmpResp.toNative(resp)
 
 	for {
-		retCode, errno := C.seccomp_notify_respond(C.int(fd), resp)
+		retCode, errno := C.compat_notify_respond(C.int(fd), resp)
 		if retCode == 0 {
 			break
 		}
@@ -732,7 +754,7 @@ func notifIDValid(fd ScmpFd, id uint64) error {
 	}
 
 	for {
-		retCode, errno := C.seccomp_notify_id_valid(C.int(fd), C.uint64_t(id))
+		retCode, errno := C.compat_notify_id_valid(C.int(fd), C.uint64_t(id))
 		if retCode == 0 {
 			break
 		}
