@@ -25,6 +25,10 @@ jobs:
             arch: amd64
           - os: ubuntu-24.04-arm
             arch: arm64
+        exclude:
+          # v2.3.1 is only used by the cross-version job, which is amd64 only.
+          - libseccomp: "v2.3.1"
+            os: ubuntu-24.04-arm
 
     runs-on: ${{ matrix.os }}
 
@@ -103,11 +107,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: [1.19.x, 1.25.x, 1.26.x]
+        # Every libseccomp version on every runner, with the latest Go.
+        go-version: [1.26.x]
         libseccomp: ["v2.3.3", "v2.4.4", "v2.5.6", "v2.6.1", "HEAD"]
         os: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm]
-        # Which of the artifacts built above to use.
         include:
+          # Which of the artifacts built above to use.
           - os: ubuntu-24.04
             arch: amd64
           - os: ubuntu-24.04-arm
@@ -116,6 +121,22 @@ jobs:
             arch: amd64
           - os: ubuntu-26.04-arm
             arch: arm64
+          # The Go version does not interact with the libseccomp version, so
+          # the other supported Go versions get a cell each, rather than a
+          # full sweep. 1.19 is the minimum one (see go.mod).
+          #
+          # Unlike the entries above, these create new combinations rather
+          # than adding to the existing ones, so they have to spell out arch
+          # as well (an include entry is not applied to a combination another
+          # include entry has created).
+          - go-version: 1.19.x
+            libseccomp: "v2.6.1"
+            os: ubuntu-24.04
+            arch: amd64
+          - go-version: 1.25.x
+            libseccomp: "v2.6.1"
+            os: ubuntu-24.04
+            arch: amd64
 
     runs-on: ${{ matrix.os }}
 
