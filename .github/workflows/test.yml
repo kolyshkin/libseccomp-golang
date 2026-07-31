@@ -56,7 +56,7 @@ jobs:
           # Any other git tag/branch/sha: clone and build from the repo.
           git clone https://github.com/seccomp/libseccomp
           cd libseccomp
-          git checkout $VER
+          git checkout "$VER"
           # In main branch, configure.ac sets libseccomp version to 0.0.0, which
           # results in error when compiling libseccomp-golang. While 0.0.0 is
           # there for a reason, here we need to build and test against HEAD, so
