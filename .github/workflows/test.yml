@@ -9,35 +9,37 @@ on:
   pull_request:
 
 jobs:
-  test:
+  build-libseccomp:
+    # Build every libseccomp version used below, once per architecture, and
+    # share the result as an artifact. Doing this in the test job instead
+    # would mean building the very same library in every matrix cell.
     strategy:
       fail-fast: false
       matrix:
-        go-version: [1.19.x, 1.25.x, 1.26.x]
         libseccomp: ["v2.3.3", "v2.4.4", "v2.5.6", "v2.6.1", "HEAD"]
-        os: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      # sha256 checksums for libseccomp release tarballs.
+      SHA256_2_3_3: 7fc28f4294cc72e61c529bedf97e705c3acf9c479a8f1a3028d4cd2ca9f3b155
+      SHA256_2_4_4: 4e79738d1ef3c9b7ca9769f1f8b8d84fc17143c2c1c432e53b9c64787e0ff3eb
+      SHA256_2_5_6: 04c37d72965dce218a0c94519b056e1775cf786b5260ee2b7992956c4ee38633
+      SHA256_2_6_1: 501f66c667225d53791b97e1d7cf85ab764c297d04881f60f38f451c4b0ee1be
+
     steps:
 
-    - name: checkout
-      uses: actions/checkout@v7
-
     - name: build libseccomp ${{ matrix.libseccomp }}
-      env:
-        # sha256 checksums for libseccomp release tarballs.
-        SHA256_2_3_3: 7fc28f4294cc72e61c529bedf97e705c3acf9c479a8f1a3028d4cd2ca9f3b155
-        SHA256_2_4_4: 4e79738d1ef3c9b7ca9769f1f8b8d84fc17143c2c1c432e53b9c64787e0ff3eb
-        SHA256_2_5_6: 04c37d72965dce218a0c94519b056e1775cf786b5260ee2b7992956c4ee38633
-        SHA256_2_6_1: 501f66c667225d53791b97e1d7cf85ab764c297d04881f60f38f451c4b0ee1be
       run: |
         set -x
         sudo apt -qq update
         sudo apt -qq install gperf
-
-        PREFIX="$(pwd)/seccomp"
-        LIBDIR="$PREFIX/lib"
 
         VER="${{ matrix.libseccomp }}"
         if [[ "$VER" == v* ]]; then
@@ -66,20 +68,80 @@ jobs:
           #  - version >= current is needed;
           #  - chances are good such version won't ever exist;
           #  - it is easy to spot in tests output;
-          #  - the LIBFILE pattern below expects single digits.
+          #  - the LIBFILE pattern in the test job expects single digits.
           VER=9.9.9
           sed -i "/^AC_INIT(/s/0\.0\.0/$VER/" configure.ac
           ./autogen.sh
         fi
-        ./configure --prefix="$PREFIX" --libdir="$LIBDIR"
-        make
+
+        # Install to a fixed absolute location, since libseccomp.pc records
+        # it, and the jobs below unpack this to the very same place.
+        PREFIX="/opt/seccomp/$VER"
+        ./configure --prefix="$PREFIX" --libdir="$PREFIX/lib"
+        make -j"$(nproc)"
         sudo make install
         cd -
-        rm -rf libseccomp
 
-        # For the next steps to build and execute with the compiled library.
-        echo "PKG_CONFIG_LIBDIR=$LIBDIR/pkgconfig" >> $GITHUB_ENV
-        LIBFILE="$(echo $LIBDIR/libseccomp.so.?.?.?)"
+        # Pack it up, rather than uploading the tree as is, since GitHub
+        # artifacts preserve neither symlinks nor file modes.
+        tar -cf "seccomp-$VER.tar" -C / "opt/seccomp/$VER"
+
+    - name: upload libseccomp ${{ matrix.libseccomp }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: seccomp-${{ matrix.libseccomp }}-${{ matrix.arch }}
+        path: seccomp-*.tar
+        retention-days: 1
+
+
+  test:
+    needs: build-libseccomp
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: [1.19.x, 1.25.x, 1.26.x]
+        libseccomp: ["v2.3.3", "v2.4.4", "v2.5.6", "v2.6.1", "HEAD"]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm]
+        # Which of the artifacts built above to use.
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+          - os: ubuntu-26.04
+            arch: amd64
+          - os: ubuntu-26.04-arm
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: download libseccomp ${{ matrix.libseccomp }}
+      uses: actions/download-artifact@v8
+      with:
+        name: seccomp-${{ matrix.libseccomp }}-${{ matrix.arch }}
+
+    - name: install libseccomp ${{ matrix.libseccomp }}
+      run: |
+        set -x
+        sudo tar -C / -xf seccomp-*.tar
+        rm -f seccomp-*.tar
+
+        # The tarball unpacks into /opt/seccomp/<version>; for HEAD, that is
+        # the stand-in version it was built as.
+        set -- /opt/seccomp/*
+        [ $# -eq 1 ] || { echo "Error: expected a single version, got: $*"; exit 1; }
+        PREFIX="$1"
+        VER="${PREFIX##*/}"
+
+        # For the next steps to build and execute with this library.
+        echo "PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig" >> $GITHUB_ENV
+        LIBFILE="$(echo $PREFIX/lib/libseccomp.so.?.?.?)"
         echo "LD_PRELOAD=$LIBFILE" >> $GITHUB_ENV
         # For TestExpectedSeccompVersion.
         echo "_EXPECTED_LIBSECCOMP_VERSION=$VER" >> $GITHUB_ENV
@@ -119,11 +181,11 @@ jobs:
         unset LD_PRELOAD
 
         # Make sure it is indeed the distro-provided library, rather than the
-        # one built above (which lives under $GITHUB_WORKSPACE).
+        # one installed above (which lives under /opt/seccomp).
         LIB="$(ldd ./libseccomp-golang.test | awk '/libseccomp\.so\.2 /{print $3}')"
         LIB="$(readlink -f "$LIB")"
         case "$LIB" in
-        "$GITHUB_WORKSPACE"/*) echo "Error: not a system libseccomp: $LIB"; exit 1;;
+        /opt/seccomp/*) echo "Error: not a system libseccomp: $LIB"; exit 1;;
         esac
 
         # The version reported by the package is the lower of the compile-time
